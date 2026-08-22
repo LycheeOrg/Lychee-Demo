@@ -22,7 +22,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      APP_KEY: "base64:ucMiFCbfQZUFOxrQz1x9C0OBJeLCCCAieZmnEHXmyGI="
+      APP_KEY: "${APP_KEY}"
       APP_NAME: "Lychee-demo"
       APP_ENV: "production"
       APP_TIMEZONE: "UTC"

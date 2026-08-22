@@ -1,0 +1,85 @@
+name: lychee-demo 
+services:
+  lychee_demo:
+    container_name: lychee_demo
+    image: ghcr.io/lycheeorg/lychee:demo
+    restart: unless-stopped  # Auto-restart at container level (outer layer)
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined  # FrankenPHP may need this; consider custom seccomp profile
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - NET_BIND_SERVICE
+    read_only: false  # Laravel needs write access to storage/cache
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev,size=1000m
+    ports:
+      - "8000:8000"
+    environment:
+      APP_KEY: "base64:ucMiFCbfQZUFOxrQz1x9C0OBJeLCCCAieZmnEHXmyGI="
+      APP_NAME: "Lychee-demo"
+      APP_ENV: "production"
+      APP_TIMEZONE: "UTC"
+      APP_URL: "https://demo.lycheeorg.dev"
+      DB_CONNECTION: "sqlite"
+      APP_FORCE_HTTPS: "true"
+      SESSION_DRIVER: "file"
+      SESSION_LIFETIME: "15"
+      QUEUE_CONNECTION: "sync"
+      CLOCKWORK_ENABLE: "false"
+      DEBUGBAR_ENABLED: "false"
+      LOG_VIEWER_ENABLED: "false"
+      DISABLE_IMPORT_FROM_SERVER: "true"
+      RUN_AS_ROOT: "yes"
+      TRUSTED_PROXIES: "*"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - traefik-servicenet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.demo.rule=Host(`demo.lycheeorg.dev`)"
+      - "traefik.http.routers.demo.entrypoints=websecure"
+      - "traefik.http.routers.demo.tls.certresolver=myresolver"
+      - "traefik.http.routers.demo.middlewares=middlewares-secure-headers@file,demo"
+      - "traefik.http.services.demo.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.demo.headers.sslproxyheaders.Proto=https"
+      - "traefik.http.middlewares.demo.headers.sslproxyheaders.X-Forwarded-Proto=https"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+  restarter:
+    image: docker:cli
+    container_name: restarter
+    volumes:
+      # map docker.sock into the container  -- REALLY NOT IDEAL FOR SECURITY
+      - /var/run/docker.sock:/var/run/docker.sock
+      # mount ./restarter.sh and ./docker-compose.yml
+      - ./restarter.sh:/restarter.sh
+      - ./docker-compose.yml:/docker-compose.yml
+    environment:
+      RESET_SERVICES: 'lychee_demo'
+    entrypoint: /restarter.sh
+    restart: unless-stopped
+    depends_on:
+      lychee_demo:
+        condition: service_healthy
+
+networks:
+  traefik-servicenet:
+    external: true
